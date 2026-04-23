@@ -56,11 +56,13 @@ def _print_file_human(path: Path, status: str, errors: list[CheckError],
                   f"(raise --max-errors to see all)")
 
 
-def _file_result_dict(path: Path, status: str, errors: list[CheckError], info: dict | None) -> dict:
+def _file_result_dict(path: Path, status: str, errors: list[CheckError],
+                      info: dict | None, truncated: bool = False) -> dict:
     d = {
         "path": str(path),
         "status": status,
         "errors": [asdict(e) for e in errors],
+        "truncated": truncated,
     }
     if info is not None:
         d["info"] = info
@@ -90,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("files", nargs="*", help="JSON file(s) to validate")
     parser.add_argument("--json", action="store_true",
                         help="Emit machine-readable JSON instead of human-readable text")
+    parser.add_argument("--max-errors", type=int, default=20, metavar="N",
+                        help="Show at most N errors per file (default: 20)")
     args = parser.parse_args(argv)
 
     if not args.files:
@@ -97,58 +101,70 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     results: list[dict] = []
-    any_fail = False
+    ok_count = 0
+    fail_count = 0
 
     for raw in args.files:
         path = Path(raw)
+
         if not path.exists():
             if args.json:
-                results.append({"path": str(path), "status": "fail",
-                                "errors": [{"layer": 0, "path": "<io>",
-                                            "message": "file not found", "hint": None}]})
-                any_fail = True
+                results.append(_file_result_dict(
+                    path, "fail",
+                    [CheckError(layer=0, path="<io>", message="file not found")],
+                    None, False,
+                ))
+                fail_count += 1
                 continue
-            else:
-                print(f"✗ {path}  (file not found)", file=sys.stderr)
-                return 3
+            print(f"✗ {path}  (file not found)", file=sys.stderr)
+            return 3
+
         try:
             data = _load_json(path)
         except (OSError, json.JSONDecodeError) as e:
             if args.json:
-                results.append({"path": str(path), "status": "fail",
-                                "errors": [{"layer": 0, "path": "<io>",
-                                            "message": f"I/O or JSON parse error: {e}",
-                                            "hint": None}]})
-                any_fail = True
+                results.append(_file_result_dict(
+                    path, "fail",
+                    [CheckError(layer=0, path="<io>",
+                                message=f"I/O or JSON parse error: {e}")],
+                    None, False,
+                ))
+                fail_count += 1
                 continue
-            else:
-                print(f"✗ {path}  (I/O or JSON parse error: {e})", file=sys.stderr)
-                return 3
+            print(f"✗ {path}  (I/O or JSON parse error: {e})", file=sys.stderr)
+            return 3
 
         errors = collect_errors(data)
         if errors:
-            any_fail = True
+            fail_count += 1
+            shown = errors[:args.max_errors]
+            suppressed = max(0, len(errors) - args.max_errors)
+            truncated = suppressed > 0
             if args.json:
-                results.append(_file_result_dict(path, "fail", errors, None))
+                results.append(_file_result_dict(path, "fail", shown, None, truncated))
             else:
-                _print_file_human(path, "fail", errors, None)
+                _print_file_human(path, "fail", shown, None, suppressed)
         else:
+            ok_count += 1
             info = {"version": data.get("version"), **_summarize_file(path, data)}
             if args.json:
-                results.append(_file_result_dict(path, "ok", [], info))
+                results.append(_file_result_dict(path, "ok", [], info, False))
             else:
                 _print_file_human(path, "ok", [], info)
 
     if args.json:
-        summary = {
-            "total": len(results),
-            "ok":   sum(1 for r in results if r["status"] == "ok"),
-            "fail": sum(1 for r in results if r["status"] == "fail"),
-        }
-        print(json.dumps({"summary": summary, "files": results},
-                         indent=2, ensure_ascii=False))
+        print(json.dumps({
+            "summary": {"total": ok_count + fail_count,
+                        "ok": ok_count, "fail": fail_count},
+            "files": results,
+        }, indent=2, ensure_ascii=False))
+    elif len(args.files) > 1:
+        print()
+        print("---")
+        total = ok_count + fail_count
+        print(f"Summary: {total} files, {ok_count} ✓ ok, {fail_count} ✗ fail")
 
-    return 1 if any_fail else 0
+    return 1 if fail_count > 0 else 0
 
 
 if __name__ == "__main__":

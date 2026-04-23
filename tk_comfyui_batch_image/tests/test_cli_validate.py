@@ -103,3 +103,52 @@ def test_cli_json_output_structure_on_failure(tmp_path, capsys):
     assert err["layer"] == 2
     assert err["path"] == "pages[0].page_index"
     assert "expected 1" in err["message"]
+
+
+def test_cli_multi_file_mixed_exits_1_with_summary(tmp_path, capsys):
+    ok = _write(tmp_path, "ok.json", _valid_minimal_book())
+    bad_book = _valid_minimal_book()
+    bad_book["pages"][0]["page_index"] = 5
+    bad = _write(tmp_path, "bad.json", bad_book)
+    code = main([str(ok), str(bad)])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "✓" in out and "✗" in out
+    assert "Summary" in out
+    assert "2 files" in out
+    assert "1 ✓" in out and "1 ✗" in out
+
+
+def test_cli_max_errors_truncates_human(tmp_path, capsys):
+    book = _valid_minimal_book()
+    panel_template = book["pages"][0]["panels"][0]
+    book["pages"] = [{
+        "page_index": 100 + i,
+        "page_prompt": {"positive": "", "negative": ""},
+        "layout_mode": "vertical_stack",
+        "panels": [{**panel_template, "panel_index": 1, "height_px": 100}],
+    } for i in range(10)]
+    p = _write(tmp_path, "many.json", book)
+    code = main([str(p), "--max-errors", "3"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert out.count("[L2]") == 3
+    assert "7 more error" in out
+
+
+def test_cli_max_errors_truncated_flag_in_json(tmp_path, capsys):
+    book = _valid_minimal_book()
+    panel_template = book["pages"][0]["panels"][0]
+    book["pages"] = [{
+        "page_index": 100 + i,
+        "page_prompt": {"positive": "", "negative": ""},
+        "layout_mode": "vertical_stack",
+        "panels": [{**panel_template, "panel_index": 1, "height_px": 100}],
+    } for i in range(5)]
+    p = _write(tmp_path, "many.json", book)
+    code = main([str(p), "--json", "--max-errors", "2"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 1
+    f0 = payload["files"][0]
+    assert len(f0["errors"]) == 2
+    assert f0["truncated"] is True
