@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
 
 from ..core.cache_manager import (
@@ -16,18 +15,9 @@ from ..core.cache_manager import (
     read_manifest,
     write_manifest,
 )
+from ..core.image_ops import arr_to_pil, pil_to_arr
 from ..core.sampler_runner import SamplerBackend, run_panel_sampler
 from ..core.types import COMIC_SCRIPT_TYPE, SolvedPanel, SolvedScript
-
-
-def _arr_to_pil(arr: np.ndarray) -> Image.Image:
-    arr_u8 = np.clip(arr * 255.0, 0, 255).astype(np.uint8) if arr.dtype != np.uint8 else arr
-    return Image.fromarray(arr_u8, mode="RGB")
-
-
-def _pil_to_arr(img: Image.Image) -> np.ndarray:
-    arr = np.asarray(img.convert("RGB"), dtype=np.float32) / 255.0
-    return arr
 
 
 def _red_x(w: int, h: int) -> np.ndarray:
@@ -85,7 +75,8 @@ class ComicBatchGenerator:
                 "clip":         ("CLIP",),
                 "vae":          ("VAE",),
                 "on_failure":   (["retry_then_skip", "halt"], {"default": "retry_then_skip"}),
-                "retries":      ("INT",    {"default": 2, "min": 0, "max": 10}),
+                # Total attempts per panel, including the first try.
+                "max_attempts": ("INT",    {"default": 3, "min": 1, "max": 11}),
             },
             "optional": {
                 "positive_suffix": ("STRING", {"default": "", "multiline": True}),
@@ -123,11 +114,12 @@ class ComicBatchGenerator:
 
     def generate(
         self, comic_script: SolvedScript, model, clip, vae,
-        on_failure, retries,
+        on_failure, max_attempts,
         positive_suffix: str = "", negative_suffix: str = "",
         _backend: SamplerBackend | None = None,
         _out_dir: Path | None = None,
     ):
+        import torch  # lazy — keeps ComfyUI node scan cheap
         backend = _backend if _backend is not None else _ComfyUIBackend()
         out_dir = self._resolve_out_dir(comic_script.job_id, _out_dir)
 
@@ -148,7 +140,7 @@ class ComicBatchGenerator:
 
                 if manifest_matches(paths.manifest, run_panel):
                     manifest = read_manifest(paths.manifest)
-                    img = _pil_to_arr(Image.open(paths.image))
+                    img = pil_to_arr(Image.open(paths.image))
                     status = manifest.get("status", "ok")
                     log_lines.append(f"{tag} ... cached"
                                      + (" (skipped placeholder)" if status == "skipped" else ""))
@@ -157,7 +149,7 @@ class ComicBatchGenerator:
 
                 img: np.ndarray | None = None
                 last_err: BaseException | None = None
-                for attempt in range(1 + retries):
+                for attempt in range(max_attempts):
                     t0 = time.time()
                     try:
                         img = run_panel_sampler(backend, model=model, clip=clip, vae=vae, panel=run_panel)
@@ -167,12 +159,12 @@ class ComicBatchGenerator:
                                 f"sampler returned shape {img.shape}, expected ({expected_h}, {expected_w}, 3)"
                             )
                         log_lines.append(f"{tag} ... generated ({time.time() - t0:.1f}s)"
-                                         + (f" retry#{attempt}" if attempt else ""))
+                                         + (f" attempt {attempt + 1}/{max_attempts}" if attempt else ""))
                         break
                     except Exception as e:   # noqa: BLE001
                         last_err = e
                         img = None
-                        log_lines.append(f"{tag} ... FAILED attempt {attempt + 1}: {e}")
+                        log_lines.append(f"{tag} ... FAILED attempt {attempt + 1}/{max_attempts}: {e}")
                         continue
 
                 if img is None:
@@ -180,14 +172,14 @@ class ComicBatchGenerator:
                         raise RuntimeError(f"panel generation failed: {tag}") from last_err
                     # retry_then_skip — persist placeholder so re-runs stay skipped.
                     img = _red_x(*run_panel.bbox_size)
-                    _arr_to_pil(img).save(paths.image, format="PNG")
+                    arr_to_pil(img).save(paths.image, format="PNG")
                     write_manifest(paths.manifest, panel_hash(run_panel),
                                    extra={"status": "skipped"})
                     log_lines.append(f"{tag} ... skipped with placeholder")
                     images.append(img)
                     continue
 
-                _arr_to_pil(img).save(paths.image, format="PNG")
+                arr_to_pil(img).save(paths.image, format="PNG")
                 write_manifest(paths.manifest, panel_hash(run_panel),
                                extra={"status": "ok"})
                 images.append(img)

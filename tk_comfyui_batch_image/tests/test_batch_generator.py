@@ -34,7 +34,7 @@ def _gen(node, script, backend, out_dir, on_failure="halt"):
     return node.generate(
         comic_script=script, model="M", clip="C", vae="V",
         positive_suffix="", negative_suffix="",
-        on_failure=on_failure, retries=1,
+        on_failure=on_failure, max_attempts=2,
         _backend=backend, _out_dir=out_dir,
     )
 
@@ -98,7 +98,7 @@ def test_retry_then_skip_mode_tolerates_transient_failure(tmp_path: Path):
     images, _, log = _gen(ComicBatchGenerator(), script, backend, tmp_path,
                           on_failure="retry_then_skip")
     assert images.shape[0] == 4
-    assert "retry" in log.lower()
+    assert "attempt 2/2" in log
 
 
 def test_halt_mode_raises_on_failure(tmp_path: Path):
@@ -127,7 +127,7 @@ def test_generator_does_not_mutate_input_panels(tmp_path: Path):
     node.generate(
         comic_script=script, model="M", clip="C", vae="V",
         positive_suffix="MASTERPIECE", negative_suffix="BLURRY",
-        on_failure="halt", retries=0,
+        on_failure="halt", max_attempts=1,
         _backend=RecordingBackend(), _out_dir=tmp_path,
     )
     after = _snapshot_panels(script)

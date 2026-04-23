@@ -4,14 +4,10 @@ from __future__ import annotations
 import json
 
 import numpy as np
-import torch
 
 from ..core.compositor import compose_page
+from ..core.image_ops import pil_to_arr
 from ..core.types import COMIC_SCRIPT_TYPE, SolvedScript
-
-
-def _pil_to_tensor(img) -> np.ndarray:
-    return np.asarray(img.convert("RGB"), dtype=np.float32) / 255.0
 
 
 def _bboxes_metadata(script: SolvedScript) -> dict:
@@ -52,8 +48,9 @@ class ComicPageComposer:
             }
         }
 
-    def compose(self, generated_panels: torch.Tensor, comic_script: SolvedScript,
+    def compose(self, generated_panels, comic_script: SolvedScript,
                 debug_overlay: bool):
+        import torch  # lazy — keeps ComfyUI node scan cheap
         panels_np = generated_panels.cpu().numpy()   # (N, Hmax, Wmax, 3)
 
         out_pages: list[np.ndarray] = []
@@ -72,7 +69,7 @@ class ComicPageComposer:
                 panel_imgs.append((panel, cropped))
                 idx += 1
             pil = compose_page(page, panel_imgs)
-            out_pages.append(_pil_to_tensor(pil))
+            out_pages.append(pil_to_arr(pil))
 
         # Pad composed pages to same shape if sizes differ (M1: all same)
         max_h = max(p.shape[0] for p in out_pages)

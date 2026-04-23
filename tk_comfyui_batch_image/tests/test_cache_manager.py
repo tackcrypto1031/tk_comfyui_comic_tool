@@ -94,3 +94,25 @@ def test_manifest_matches_false_when_no_file(tmp_path: Path):
     p = _panel()
     paths = panel_paths(tmp_path, p)
     assert manifest_matches(paths.manifest, p) is False
+
+
+def test_manifest_matches_false_when_version_mismatch(tmp_path: Path):
+    """Manifests from older releases (or manifests with no version) are stale
+    — the panel_hash input schema may have shifted and we must re-render."""
+    import json as _json
+
+    p = _panel()
+    paths = panel_paths(tmp_path, p)
+    paths.image.parent.mkdir(parents=True, exist_ok=True)
+    # Simulate a legacy manifest: correct hash but no manifest_version.
+    paths.manifest.write_text(_json.dumps({"hash": panel_hash(p)}), encoding="utf-8")
+    assert manifest_matches(paths.manifest, p) is False
+
+
+def test_write_manifest_includes_version(tmp_path: Path):
+    p = _panel()
+    paths = panel_paths(tmp_path, p)
+    paths.image.parent.mkdir(parents=True, exist_ok=True)
+    write_manifest(paths.manifest, panel_hash(p))
+    m = read_manifest(paths.manifest)
+    assert m["manifest_version"] == 1

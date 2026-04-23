@@ -37,7 +37,7 @@ def test_full_pipeline_basic_script(tmp_path: Path):
     gen = ComicBatchGenerator()
     panels, pass_script, log = gen.generate(
         comic_script=script, model="M", clip="C", vae="V",
-        on_failure="halt", retries=0,
+        on_failure="halt", max_attempts=1,
         positive_suffix="", negative_suffix="",
         _backend=GreyBackend(), _out_dir=tmp_path,
     )
@@ -55,7 +55,7 @@ def test_full_pipeline_basic_script(tmp_path: Path):
     gen2 = ComicBatchGenerator()
     panels2, _, log2 = gen2.generate(
         comic_script=script, model="M", clip="C", vae="V",
-        on_failure="halt", retries=0,
+        on_failure="halt", max_attempts=1,
         positive_suffix="", negative_suffix="",
         _backend=GreyBackend(), _out_dir=tmp_path,
     )

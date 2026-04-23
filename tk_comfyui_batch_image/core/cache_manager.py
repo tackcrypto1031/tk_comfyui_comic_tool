@@ -8,6 +8,11 @@ from pathlib import Path
 
 from .types import SolvedPanel
 
+MANIFEST_VERSION = 1
+"""Bump when the panel_hash input schema or manifest layout changes in a way
+that invalidates older caches. manifest_matches() treats version mismatch as
+a miss so stale manifests are regenerated safely."""
+
 
 @dataclass(frozen=True)
 class PanelPaths:
@@ -45,7 +50,7 @@ def panel_paths(out_dir: Path, panel: SolvedPanel) -> PanelPaths:
 
 def write_manifest(path: Path, hash_hex: str, extra: dict | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"hash": hash_hex}
+    payload = {"manifest_version": MANIFEST_VERSION, "hash": hash_hex}
     if extra:
         payload.update(extra)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -61,5 +66,9 @@ def manifest_matches(manifest_path: Path, panel: SolvedPanel) -> bool:
     try:
         m = read_manifest(manifest_path)
     except (OSError, json.JSONDecodeError):
+        return False
+    # Older manifests without the version field are treated as stale —
+    # hash semantics may have shifted between releases.
+    if m.get("manifest_version") != MANIFEST_VERSION:
         return False
     return m.get("hash") == panel_hash(panel)
