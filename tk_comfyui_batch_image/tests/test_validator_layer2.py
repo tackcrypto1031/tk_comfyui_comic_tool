@@ -88,6 +88,54 @@ def test_r2_panel_index_out_of_order():
     assert any(e.path == "pages[0].panels[0].panel_index" for e in errs)
 
 
+def test_r3_layout_fits_exact_edge_passes():
+    """page_height=768, bleed=20 → inner=728; 3x200 panels + 2x64 gutter = 728."""
+    book = _minimal_valid_book()
+    book["page_height_px"] = 768
+    book["bleed_px"] = 20
+    book["gutter_px"] = 64
+    template = book["pages"][0]["panels"][0]
+    book["pages"][0]["panels"] = [
+        {**deepcopy(template), "panel_index": i + 1, "height_px": 200, "width_px": 1040}
+        for i in range(3)
+    ]
+    assert collect_errors(book) == []
+
+
+def test_r3_total_height_exceeds_inner_area():
+    book = _minimal_valid_book()
+    book["page_height_px"] = 768
+    book["bleed_px"] = 20
+    book["gutter_px"] = 10
+    template = book["pages"][0]["panels"][0]
+    book["pages"][0]["panels"] = [
+        {**deepcopy(template), "panel_index": i + 1, "height_px": 400, "width_px": 1040}
+        for i in range(2)
+    ]
+    # 800 + 10 = 810 > 728
+    errs = collect_errors(book)
+    assert any(e.path == "pages[0]" for e in errs)
+    match = next(e for e in errs if e.path == "pages[0]")
+    assert "810" in match.message
+    assert "728" in match.message
+    assert match.hint is not None
+
+
+def test_r3_page_level_gutter_override_wins():
+    book = _minimal_valid_book()
+    book["page_height_px"] = 768
+    book["bleed_px"] = 20
+    book["gutter_px"] = 100     # book-level would exceed
+    book["pages"][0]["gutter_px"] = 10   # page-level override fits
+    template = book["pages"][0]["panels"][0]
+    book["pages"][0]["panels"] = [
+        {**deepcopy(template), "panel_index": i + 1, "height_px": 300, "width_px": 1040}
+        for i in range(2)
+    ]
+    # With page gutter=10: 600 + 10 = 610 ≤ 728 ✓
+    assert collect_errors(book) == []
+
+
 def _minimal_valid_book() -> dict:
     return {
         "version": "1.0",

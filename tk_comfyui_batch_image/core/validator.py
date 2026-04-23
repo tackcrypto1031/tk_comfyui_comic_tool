@@ -71,9 +71,40 @@ def r_panel_index_continuity(data: dict) -> list[CheckError]:
     return errors
 
 
+def r_layout_fits_page(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    page_height = data.get("page_height_px")
+    bleed = data.get("bleed_px", 0)
+    book_gutter = data.get("gutter_px", 0)
+
+    if page_height is None:
+        return errors  # R5 will catch this for page_template="custom"
+
+    inner_h = page_height - bleed * 2
+    for i, page in enumerate(data.get("pages", [])):
+        if page.get("layout_mode") != "vertical_stack":
+            continue
+        gutter = page.get("gutter_px", book_gutter)
+        panels = page.get("panels", [])
+        panel_total = sum(p.get("height_px", 0) for p in panels)
+        gutter_total = max(0, len(panels) - 1) * gutter
+        used = panel_total + gutter_total
+        if used > inner_h:
+            errors.append(CheckError(
+                layer=2,
+                path=f"pages[{i}]",
+                message=f"total height {panel_total}px (panels) + {gutter_total}px (gutters) "
+                        f"= {used}px exceeds inner area {inner_h}px "
+                        f"(= {page_height} - bleed {bleed}*2)",
+                hint="reduce a panel height, lower gutter_px, or raise page_height_px",
+            ))
+    return errors
+
+
 _LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = [
     r_page_index_continuity,
     r_panel_index_continuity,
+    r_layout_fits_page,
 ]
 
 
