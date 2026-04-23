@@ -1,7 +1,6 @@
 import numpy as np
-from tk_comfyui_batch_image.core.sampler_runner import (
-    SamplerBackend, run_panel_sampler
-)
+
+from tk_comfyui_batch_image.core.sampler_runner import SamplerBackend, run_panel_sampler
 from tk_comfyui_batch_image.core.types import SolvedPanel
 
 

@@ -1,7 +1,7 @@
 """Runtime dataclasses for the solved (normalized) comic script."""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Optional
 
 COMIC_SCRIPT_TYPE = "COMIC_SCRIPT"
 
@@ -19,8 +19,8 @@ class SolvedPanel:
     bbox_size: tuple[int, int]       # (w, h) — for rect = width_px × height_px
     align: str                        # "left" | "center" | "right"
     shape_type: str                   # "rect" in M1
-    polygon_local: Optional[list[tuple[float, float]]]   # None for rect
-    polygon_abs: Optional[list[tuple[int, int]]]         # None for rect
+    polygon_local: list[tuple[float, float]] | None   # None for rect
+    polygon_abs: list[tuple[int, int]] | None         # None for rect
     seed: int
     sampler: dict                     # merged sampler settings
     border: dict                      # {"width_px": int, "color": "#RRGGBB", "style": str}

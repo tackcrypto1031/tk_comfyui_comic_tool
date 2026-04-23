@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+
 from tk_comfyui_batch_image.nodes.script_loader import ComicScriptLoader
 
 FIXTURES = Path(__file__).parent / "fixtures" / "scripts"

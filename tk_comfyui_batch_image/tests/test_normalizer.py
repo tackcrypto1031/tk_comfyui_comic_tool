@@ -1,8 +1,9 @@
 # tests/test_normalizer.py
 import json
 from pathlib import Path
+
 from tk_comfyui_batch_image.core.normalizer import normalize_script
-from tk_comfyui_batch_image.core.types import SolvedScript, SolvedPage, SolvedPanel
+from tk_comfyui_batch_image.core.types import SolvedPanel, SolvedScript
 
 FIXTURES = Path(__file__).parent / "fixtures" / "scripts"
 

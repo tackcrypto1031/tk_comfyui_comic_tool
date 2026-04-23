@@ -1,5 +1,6 @@
 """Normalize a validated JSON dict into a SolvedScript with fully-resolved panels."""
 from __future__ import annotations
+
 from .constants import PAGE_TEMPLATES
 from .layout_solver import solve_vertical_stack
 from .prompt_builder import build_prompt_pair
@@ -44,7 +45,7 @@ def normalize_script(data: dict) -> SolvedScript:
         )
 
         solved_panels: list[SolvedPanel] = []
-        for raw, bb in zip(page_panels_raw, bbox_specs):
+        for raw, bb in zip(page_panels_raw, bbox_specs, strict=False):
             pos, neg = build_prompt_pair(
                 style=style_p, character=char_p,
                 page=page_prompt, scene=raw["scene_prompt"],

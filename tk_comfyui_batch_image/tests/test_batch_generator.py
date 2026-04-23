@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
+
 import numpy as np
-import torch
 import pytest
+import torch
 
 from tk_comfyui_batch_image.core.normalizer import normalize_script
 from tk_comfyui_batch_image.core.sampler_runner import SamplerBackend

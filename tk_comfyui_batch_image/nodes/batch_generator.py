@@ -1,8 +1,8 @@
 """ComicBatchGenerator — inner for-loop that generates every panel."""
 from __future__ import annotations
+
 import time
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
@@ -88,7 +88,7 @@ class ComicBatchGenerator:
             },
         }
 
-    def _resolve_out_dir(self, job_id: str, override: Optional[Path] = None) -> Path:
+    def _resolve_out_dir(self, job_id: str, override: Path | None = None) -> Path:
         if override is not None:
             d = Path(override) / "comics" / job_id
         else:
@@ -114,8 +114,8 @@ class ComicBatchGenerator:
         sampler_name, scheduler, steps, cfg, denoise,
         on_failure, retries,
         positive_suffix: str = "", negative_suffix: str = "",
-        _backend: Optional[SamplerBackend] = None,
-        _out_dir: Optional[Path] = None,
+        _backend: SamplerBackend | None = None,
+        _out_dir: Path | None = None,
     ):
         backend = _backend if _backend is not None else _ComfyUIBackend()
         out_dir = self._resolve_out_dir(comic_script.job_id, _out_dir)
@@ -153,8 +153,8 @@ class ComicBatchGenerator:
                     images.append(img)
                     continue
 
-                img: Optional[np.ndarray] = None
-                last_err: Optional[BaseException] = None
+                img: np.ndarray | None = None
+                last_err: BaseException | None = None
                 for attempt in range(1 + retries):
                     t0 = time.time()
                     try:

@@ -1,7 +1,6 @@
 import pytest
-from tk_comfyui_batch_image.core.layout_solver import (
-    solve_vertical_stack, LayoutError
-)
+
+from tk_comfyui_batch_image.core.layout_solver import LayoutError, solve_vertical_stack
 
 
 def test_single_panel_centered():

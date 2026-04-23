@@ -1,5 +1,8 @@
 from tk_comfyui_batch_image.core.types import (
-    COMIC_SCRIPT_TYPE, SolvedPanel, SolvedPage, SolvedScript
+    COMIC_SCRIPT_TYPE,
+    SolvedPage,
+    SolvedPanel,
+    SolvedScript,
 )
 
 

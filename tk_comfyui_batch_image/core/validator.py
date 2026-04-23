@@ -1,8 +1,11 @@
 """Schema validation with human-readable error messages."""
 from __future__ import annotations
-from typing import Iterable
+
+from collections.abc import Iterable
+
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as _JsonSchemaError
+
 from .schema import COMIC_SCHEMA
 
 

@@ -6,6 +6,7 @@ ComfyUI isn't importable in CI, so we stub the parts our nodes touch.
 import sys
 import types
 from pathlib import Path
+
 import pytest
 
 

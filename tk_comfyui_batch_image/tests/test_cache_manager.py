@@ -1,7 +1,12 @@
 # tests/test_cache_manager.py
 from pathlib import Path
+
 from tk_comfyui_batch_image.core.cache_manager import (
-    panel_hash, panel_paths, read_manifest, write_manifest, manifest_matches
+    manifest_matches,
+    panel_hash,
+    panel_paths,
+    read_manifest,
+    write_manifest,
 )
 from tk_comfyui_batch_image.core.types import SolvedPanel
 

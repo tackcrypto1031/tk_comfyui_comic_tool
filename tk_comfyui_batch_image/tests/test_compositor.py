@@ -1,6 +1,6 @@
 # tests/test_compositor.py
 import numpy as np
-from PIL import Image
+
 from tk_comfyui_batch_image.core.compositor import compose_page
 from tk_comfyui_batch_image.core.types import SolvedPage, SolvedPanel
 

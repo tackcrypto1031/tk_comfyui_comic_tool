@@ -1,8 +1,11 @@
 """Compose a SolvedPage + per-panel images into a single PIL.Image."""
 from __future__ import annotations
-from typing import Iterable
+
+from collections.abc import Iterable
+
 import numpy as np
 from PIL import Image, ImageDraw
+
 from .types import SolvedPage, SolvedPanel
 
 

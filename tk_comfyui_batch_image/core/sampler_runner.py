@@ -4,8 +4,11 @@ The real ComfyUI backend is wired up in `nodes/batch_generator.py`; tests inject
 a fake backend for deterministic unit tests.
 """
 from __future__ import annotations
+
 from typing import Protocol
+
 import numpy as np
+
 from .types import SolvedPanel
 
 

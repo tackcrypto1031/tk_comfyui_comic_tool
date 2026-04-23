@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+
 from jsonschema import Draft202012Validator
+
 from tk_comfyui_batch_image.core.schema import COMIC_SCHEMA
 
 FIXTURES = Path(__file__).parent / "fixtures" / "scripts"

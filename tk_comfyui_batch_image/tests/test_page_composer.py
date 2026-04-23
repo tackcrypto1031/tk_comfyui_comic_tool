@@ -1,9 +1,9 @@
 # tests/test_page_composer.py
 import json
 from pathlib import Path
+
 import numpy as np
 import torch
-from PIL import Image
 
 from tk_comfyui_batch_image.core.normalizer import normalize_script
 from tk_comfyui_batch_image.nodes.page_composer import ComicPageComposer

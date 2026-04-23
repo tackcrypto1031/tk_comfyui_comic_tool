@@ -1,5 +1,6 @@
 """ComicScriptLoader — load + validate + normalize comic script JSON."""
 from __future__ import annotations
+
 import json
 from pathlib import Path
 

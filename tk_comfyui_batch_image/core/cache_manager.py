@@ -1,10 +1,11 @@
 """Panel-hash-based cache: compute stable hash, read/write manifest, detect stale."""
 from __future__ import annotations
+
 import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+
 from .types import SolvedPanel
 
 
@@ -42,7 +43,7 @@ def panel_paths(out_dir: Path, panel: SolvedPanel) -> PanelPaths:
     )
 
 
-def write_manifest(path: Path, hash_hex: str, extra: Optional[dict] = None) -> None:
+def write_manifest(path: Path, hash_hex: str, extra: dict | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"hash": hash_hex}
     if extra:

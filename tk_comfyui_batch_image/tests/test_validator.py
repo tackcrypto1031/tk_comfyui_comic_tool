@@ -1,8 +1,10 @@
 # tests/test_validator.py
 import json
 from pathlib import Path
+
 import pytest
-from tk_comfyui_batch_image.core.validator import validate_schema, ValidationError
+
+from tk_comfyui_batch_image.core.validator import ValidationError, validate_schema
 
 FIXTURES = Path(__file__).parent / "fixtures" / "scripts"
 
