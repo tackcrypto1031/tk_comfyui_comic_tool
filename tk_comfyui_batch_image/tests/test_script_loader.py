@@ -14,7 +14,8 @@ def test_input_types_declares_modes():
     inputs = ComicScriptLoader.INPUT_TYPES()
     required = inputs["required"]
     assert "mode" in required
-    assert set(required["mode"][0]) == {"file", "path", "inline"}
+    assert set(required["mode"][0]) == {"auto", "file", "path", "inline"}
+    assert required["mode"][1]["default"] == "auto"
     optional = inputs.get("optional", {})
     assert "json_file" in optional
     assert "json_path" in optional
@@ -54,6 +55,38 @@ def test_load_from_file_mode(stub_folder_paths):
         mode="file", json_file="comics/basic.json", json_text="", json_path="",
     )
     assert script.job_id == "basic"
+
+
+def test_auto_mode_picks_path_when_only_path_filled(tmp_path: Path):
+    target = tmp_path / "script.json"
+    shutil.copy(FIXTURES / "basic.json", target)
+    node = ComicScriptLoader()
+    script, _ = node.load(mode="auto", json_path=str(target), json_file="", json_text="")
+    assert script.job_id == "basic"
+
+
+def test_auto_mode_strips_surrounding_double_quotes(tmp_path: Path):
+    target = tmp_path / "script.json"
+    shutil.copy(FIXTURES / "basic.json", target)
+    node = ComicScriptLoader()
+    quoted = f'"{target}"'
+    script, _ = node.load(mode="auto", json_path=quoted, json_file="", json_text="")
+    assert script.job_id == "basic"
+
+
+def test_auto_mode_with_no_input_errors_clearly():
+    node = ComicScriptLoader()
+    with pytest.raises(ValueError, match="no input provided"):
+        node.load(mode="auto", json_file="", json_path="", json_text="")
+
+
+def test_auto_mode_with_multiple_inputs_errors_clearly(tmp_path: Path):
+    target = tmp_path / "script.json"
+    shutil.copy(FIXTURES / "basic.json", target)
+    node = ComicScriptLoader()
+    text = (FIXTURES / "minimal.json").read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match="multiple inputs"):
+        node.load(mode="auto", json_path=str(target), json_text=text, json_file="")
 
 
 def test_invalid_json_raises_with_readable_message():
