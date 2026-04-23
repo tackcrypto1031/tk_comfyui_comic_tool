@@ -63,6 +63,11 @@ class ComicPageComposer:
             for panel in page.panels:
                 raw = panels_np[idx]
                 w, h = panel.bbox_size
+                if raw.shape[0] < h or raw.shape[1] < w or raw.shape[2] != 3:
+                    raise RuntimeError(
+                        f"panel {panel.page_index}.{panel.panel_index}: incoming image "
+                        f"shape {raw.shape} smaller than required ({h}, {w}, 3)"
+                    )
                 cropped = raw[:h, :w, :]   # matching what BatchGenerator placed (top-left of padding)
                 panel_imgs.append((panel, cropped))
                 idx += 1

@@ -108,3 +108,62 @@ def test_halt_mode_raises_on_failure(tmp_path: Path):
     backend = FlakyBackend(fail_on_panel=0, fail_times=5)
     with pytest.raises(RuntimeError):
         _gen(ComicBatchGenerator(), script, backend, tmp_path, on_failure="halt")
+
+
+def _snapshot_panels(script):
+    return [
+        (p.positive_prompt, p.negative_prompt, dict(p.sampler))
+        for page in script.pages for p in page.panels
+    ]
+
+
+def test_generator_does_not_mutate_input_panels(tmp_path: Path):
+    """Regression for C1: running generate() must not bake widget defaults or
+    prompt suffixes into the input SolvedPanel objects."""
+    data = json.loads((FIXTURES / "basic.json").read_text(encoding="utf-8"))
+    script = normalize_script(data)
+    before = _snapshot_panels(script)
+
+    node = ComicBatchGenerator()
+    node.generate(
+        comic_script=script, model="M", clip="C", vae="V",
+        positive_suffix="MASTERPIECE", negative_suffix="BLURRY",
+        sampler_name="euler", scheduler="normal", steps=10, cfg=7.0, denoise=1.0,
+        on_failure="halt", retries=0,
+        _backend=RecordingBackend(), _out_dir=tmp_path,
+    )
+    after = _snapshot_panels(script)
+    assert before == after, "generate() mutated the input panels"
+
+
+def test_retry_then_skip_persists_placeholder_across_runs(tmp_path: Path):
+    """Regression for C2: once a panel is skipped, the red-X placeholder +
+    manifest are written so the next run stays skipped instead of silently
+    re-sampling."""
+    data = json.loads((FIXTURES / "basic.json").read_text(encoding="utf-8"))
+    script = normalize_script(data)
+
+    # First run: panel 1 always fails -> skipped with placeholder.
+    backend1 = FlakyBackend(fail_on_panel=1, fail_times=99)
+    _gen(ComicBatchGenerator(), script, backend1, tmp_path, on_failure="retry_then_skip")
+
+    # Second run: NO calls should hit the flaky panel again.
+    backend2 = FlakyBackend(fail_on_panel=1, fail_times=99)
+    _gen(ComicBatchGenerator(), script, backend2, tmp_path, on_failure="retry_then_skip")
+    assert backend2.n_sample_calls == 0, "skipped panel was re-sampled on re-run"
+
+
+class WrongShapeBackend(RecordingBackend):
+    def vae_decode(self, vae, samples):
+        # Return the wrong height — should be detected by shape assertion.
+        h, w = samples["h"], samples["w"]
+        return np.full((h + 1, w, 3), 0.5, dtype=np.float32)
+
+
+def test_sampler_shape_mismatch_raises_in_halt_mode(tmp_path: Path):
+    data = json.loads((FIXTURES / "basic.json").read_text(encoding="utf-8"))
+    script = normalize_script(data)
+    with pytest.raises(RuntimeError) as excinfo:
+        _gen(ComicBatchGenerator(), script, WrongShapeBackend(), tmp_path,
+             on_failure="halt")
+    assert "sampler returned shape" in str(excinfo.value.__cause__)

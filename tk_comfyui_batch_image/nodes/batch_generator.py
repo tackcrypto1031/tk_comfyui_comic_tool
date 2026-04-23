@@ -1,6 +1,7 @@
 """ComicBatchGenerator — inner for-loop that generates every panel."""
 from __future__ import annotations
 
+import dataclasses
 import time
 from pathlib import Path
 
@@ -8,7 +9,13 @@ import numpy as np
 import torch
 from PIL import Image
 
-from ..core.cache_manager import manifest_matches, panel_hash, panel_paths, write_manifest
+from ..core.cache_manager import (
+    manifest_matches,
+    panel_hash,
+    panel_paths,
+    read_manifest,
+    write_manifest,
+)
 from ..core.sampler_runner import SamplerBackend, run_panel_sampler
 from ..core.types import COMIC_SCRIPT_TYPE, SolvedPanel, SolvedScript
 
@@ -97,17 +104,23 @@ class ComicBatchGenerator:
         (d / "panels").mkdir(parents=True, exist_ok=True)
         return d
 
-    def _merge_widget_defaults(self, panel: SolvedPanel, widget: dict) -> SolvedPanel:
-        """Apply widget-level sampler defaults when the script didn't specify.
-
-        The normalizer already filled defaults from `default_sampler` in the
-        JSON; the node-level widgets act as a LOWEST-priority fallback only if
-        the JSON default_sampler is missing a key — which the schema forbids,
-        so in practice this is a no-op. Implemented for safety.
-        """
+    def _build_runtime_panel(
+        self, panel: SolvedPanel, widget: dict,
+        positive_suffix: str, negative_suffix: str,
+    ) -> SolvedPanel:
+        """Return a NEW SolvedPanel with widget defaults merged and suffixes
+        appended. The input panel is never mutated — cache hashing, re-runs,
+        and downstream pass-through all see the un-touched original."""
         merged = {**widget, **panel.sampler}
-        panel.sampler = merged
-        return panel
+        pos = panel.positive_prompt
+        if positive_suffix.strip():
+            pos = f"{pos}, {positive_suffix.strip()}" if pos else positive_suffix.strip()
+        neg = panel.negative_prompt
+        if negative_suffix.strip():
+            neg = f"{neg}, {negative_suffix.strip()}" if neg else negative_suffix.strip()
+        return dataclasses.replace(
+            panel, sampler=merged, positive_prompt=pos, negative_prompt=neg,
+        )
 
     def generate(
         self, comic_script: SolvedScript, model, clip, vae,
@@ -131,25 +144,20 @@ class ComicBatchGenerator:
 
         for page in comic_script.pages:
             for panel in page.panels:
-                panel = self._merge_widget_defaults(panel, widget_defaults)
-                if positive_suffix.strip():
-                    panel.positive_prompt = (
-                        f"{panel.positive_prompt}, {positive_suffix.strip()}"
-                        if panel.positive_prompt else positive_suffix.strip()
-                    )
-                if negative_suffix.strip():
-                    panel.negative_prompt = (
-                        f"{panel.negative_prompt}, {negative_suffix.strip()}"
-                        if panel.negative_prompt else negative_suffix.strip()
-                    )
+                run_panel = self._build_runtime_panel(
+                    panel, widget_defaults, positive_suffix, negative_suffix,
+                )
 
-                paths = panel_paths(out_dir, panel)
+                paths = panel_paths(out_dir, run_panel)
                 done += 1
-                tag = f"[page {panel.page_index:02d}/{len(comic_script.pages):02d}] panel {panel.panel_index:02d} ({done}/{total_panels})"
+                tag = f"[page {run_panel.page_index:02d}/{len(comic_script.pages):02d}] panel {run_panel.panel_index:02d} ({done}/{total_panels})"
 
-                if manifest_matches(paths.manifest, panel):
+                if manifest_matches(paths.manifest, run_panel):
+                    manifest = read_manifest(paths.manifest)
                     img = _pil_to_arr(Image.open(paths.image))
-                    log_lines.append(f"{tag} ... cached")
+                    status = manifest.get("status", "ok")
+                    log_lines.append(f"{tag} ... cached"
+                                     + (" (skipped placeholder)" if status == "skipped" else ""))
                     images.append(img)
                     continue
 
@@ -158,26 +166,36 @@ class ComicBatchGenerator:
                 for attempt in range(1 + retries):
                     t0 = time.time()
                     try:
-                        img = run_panel_sampler(backend, model=model, clip=clip, vae=vae, panel=panel)
+                        img = run_panel_sampler(backend, model=model, clip=clip, vae=vae, panel=run_panel)
+                        expected_h, expected_w = run_panel.bbox_size[1], run_panel.bbox_size[0]
+                        if img.shape[:2] != (expected_h, expected_w) or img.ndim != 3 or img.shape[2] != 3:
+                            raise RuntimeError(
+                                f"sampler returned shape {img.shape}, expected ({expected_h}, {expected_w}, 3)"
+                            )
                         log_lines.append(f"{tag} ... generated ({time.time() - t0:.1f}s)"
                                          + (f" retry#{attempt}" if attempt else ""))
                         break
                     except Exception as e:   # noqa: BLE001
                         last_err = e
+                        img = None
                         log_lines.append(f"{tag} ... FAILED attempt {attempt + 1}: {e}")
                         continue
 
                 if img is None:
                     if on_failure == "halt":
                         raise RuntimeError(f"panel generation failed: {tag}") from last_err
-                    # retry_then_skip
-                    img = _red_x(*panel.bbox_size)
+                    # retry_then_skip — persist placeholder so re-runs stay skipped.
+                    img = _red_x(*run_panel.bbox_size)
+                    _arr_to_pil(img).save(paths.image, format="PNG")
+                    write_manifest(paths.manifest, panel_hash(run_panel),
+                                   extra={"status": "skipped"})
                     log_lines.append(f"{tag} ... skipped with placeholder")
                     images.append(img)
                     continue
 
                 _arr_to_pil(img).save(paths.image, format="PNG")
-                write_manifest(paths.manifest, panel_hash(panel))
+                write_manifest(paths.manifest, panel_hash(run_panel),
+                               extra={"status": "ok"})
                 images.append(img)
 
         # Pad all images to the same (max_h, max_w) so np.stack works when
