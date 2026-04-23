@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "job_id": "example_01_minimal",
+  "reading_direction": "ltr",
+  "page_template": "custom",
+  "page_width_px": 1080,
+  "page_height_px": 1920,
+  "bleed_px": 20,
+  "gutter_px": 10,
+  "page_background": "#FFFFFF",
+  "base_seed": 1,
+  "style_prompt":     { "positive": "manga style, clean linework", "negative": "blurry, low quality" },
+  "character_prompt": { "positive": "", "negative": "" },
+  "default_sampler":  { "sampler_name": "euler", "scheduler": "normal", "steps": 25, "cfg": 7.0, "denoise": 1.0 },
+  "default_border":   { "width_px": 2, "color": "#000000", "style": "solid" },
+  "pages": [
+    {
+      "page_index": 1,
+      "page_prompt": { "positive": "", "negative": "" },
+      "layout_mode": "vertical_stack",
+      "panels": [
+        {
+          "panel_index": 1,
+          "scene_prompt": { "positive": "a protagonist stands by a window, watching rain", "negative": "" },
+          "width_px": 1040,
+          "height_px": 600,
+          "align": "center",
+          "shape": { "type": "rect" }
+        }
+      ]
+    }
+  ]
+}
