@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "job_id": "example_05_layers",
+  "reading_direction": "ltr",
+  "page_template": "custom",
+  "page_width_px": 1080,
+  "page_height_px": 1920,
+  "bleed_px": 20,
+  "gutter_px": 20,
+  "page_background": "#FFFFFF",
+  "base_seed": 5,
+  "style_prompt":     { "positive": "high-detail manga, clean inks, fantasy art", "negative": "photo, 3d render" },
+  "character_prompt": { "positive": "a young knight, black hair, blue eyes, silver armor", "negative": "elderly, wrong hair color" },
+  "default_sampler":  { "sampler_name": "euler", "scheduler": "normal", "steps": 25, "cfg": 7.0, "denoise": 1.0 },
+  "default_border":   { "width_px": 2, "color": "#000000", "style": "solid" },
+  "pages": [
+    {
+      "page_index": 1,
+      "page_prompt": { "positive": "castle courtyard, morning", "negative": "" },
+      "layout_mode": "vertical_stack",
+      "panels": [
+        {
+          "panel_index": 1,
+          "scene_prompt": { "positive": "wide establishing shot of the courtyard with the knight in the center practicing", "negative": "" },
+          "width_px": 1040, "height_px": 900,
+          "align": "center", "shape": { "type": "rect" }
+        },
+        {
+          "panel_index": 2,
+          "scene_prompt": { "positive": "close-up of the knight mid-swing, focused expression", "negative": "" },
+          "width_px": 1040, "height_px": 960,
+          "align": "center", "shape": { "type": "rect" }
+        }
+      ]
+    },
+    {
+      "page_index": 2,
+      "page_prompt": { "positive": "high tower, vast kingdom view, sunset", "negative": "" },
+      "layout_mode": "vertical_stack",
+      "panels": [
+        {
+          "panel_index": 1,
+          "scene_prompt": { "positive": "the knight standing at the tower battlement, overlooking a sprawling kingdom", "negative": "" },
+          "width_px": 1040, "height_px": 1700,
+          "align": "center", "shape": { "type": "rect" }
+        }
+      ]
+    }
+  ]
+}

@@ -1,16 +1,25 @@
-"""Schema validation with human-readable error messages."""
+"""Schema + semantic validation with human-readable error messages."""
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 
 from jsonschema import Draft202012Validator
-from jsonschema.exceptions import ValidationError as _JsonSchemaError
 
 from .schema import COMIC_SCHEMA
 
 
 class ValidationError(Exception):
     """Raised when a comic script fails validation. Message lists all errors."""
+
+
+@dataclass(frozen=True)
+class CheckError:
+    """A single validation failure in a form both human and JSON outputs can use."""
+    layer: int            # 0 = CLI I/O / pre-validation, 1 = JSON schema, 2 = semantic rule
+    path: str             # e.g. "pages[0].panels[2].width_px" or "<root>"
+    message: str
+    hint: str | None = None
 
 
 def _format_path(path: Iterable) -> str:
@@ -23,21 +32,173 @@ def _format_path(path: Iterable) -> str:
     return "".join(parts) or "<root>"
 
 
-def _format_error(err: _JsonSchemaError) -> str:
-    path = _format_path(err.absolute_path)
-    return f"  {path}\n    {err.message}"
+def _schema_errors(data: dict) -> list[CheckError]:
+    v = Draft202012Validator(COMIC_SCHEMA)
+    errs = sorted(v.iter_errors(data), key=lambda e: list(e.absolute_path))
+    return [
+        CheckError(layer=1, path=_format_path(e.absolute_path), message=e.message)
+        for e in errs
+    ]
+
+
+def r_page_index_continuity(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    for i, page in enumerate(data.get("pages", [])):
+        expected = i + 1
+        got = page.get("page_index")
+        if got != expected:
+            errors.append(CheckError(
+                layer=2,
+                path=f"pages[{i}].page_index",
+                message=f"expected {expected}, got {got} (pages must be contiguous from 1)",
+            ))
+    return errors
+
+
+def r_panel_index_continuity(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    for i, page in enumerate(data.get("pages", [])):
+        for j, panel in enumerate(page.get("panels", [])):
+            expected = j + 1
+            got = panel.get("panel_index")
+            if got != expected:
+                errors.append(CheckError(
+                    layer=2,
+                    path=f"pages[{i}].panels[{j}].panel_index",
+                    message=f"expected {expected}, got {got} "
+                            f"(panels within a page must be contiguous from 1)",
+                ))
+    return errors
+
+
+def r_layout_fits_page(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    page_height = data.get("page_height_px")
+    bleed = data.get("bleed_px", 0)
+    book_gutter = data.get("gutter_px", 0)
+
+    if page_height is None:
+        return errors  # R5 will catch this for page_template="custom"
+
+    inner_h = page_height - bleed * 2
+    for i, page in enumerate(data.get("pages", [])):
+        if page.get("layout_mode") != "vertical_stack":
+            continue
+        gutter = page.get("gutter_px", book_gutter)
+        panels = page.get("panels", [])
+        panel_total = sum(p.get("height_px", 0) for p in panels)
+        gutter_total = max(0, len(panels) - 1) * gutter
+        used = panel_total + gutter_total
+        if used > inner_h:
+            errors.append(CheckError(
+                layer=2,
+                path=f"pages[{i}]",
+                message=f"total height {panel_total}px (panels) + {gutter_total}px (gutters) "
+                        f"= {used}px exceeds inner area {inner_h}px "
+                        f"(= {page_height} - bleed {bleed}*2)",
+                hint="reduce a panel height, lower gutter_px, or raise page_height_px",
+            ))
+    return errors
+
+
+def r_panel_width_fits(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    page_width = data.get("page_width_px")
+    bleed = data.get("bleed_px", 0)
+    if page_width is None:
+        return errors  # R5 handles missing width for custom templates
+    inner_w = page_width - bleed * 2
+    for i, page in enumerate(data.get("pages", [])):
+        for j, panel in enumerate(page.get("panels", [])):
+            w = panel.get("width_px", 0)
+            if w > inner_w:
+                errors.append(CheckError(
+                    layer=2,
+                    path=f"pages[{i}].panels[{j}]",
+                    message=f"width {w}px exceeds inner width {inner_w}px "
+                            f"(= {page_width} - bleed {bleed}*2)",
+                    hint="reduce panel.width_px or raise page_width_px",
+                ))
+    return errors
+
+
+def r_page_template_dim_consistency(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    template = data.get("page_template")
+    has_width = "page_width_px" in data
+    has_height = "page_height_px" in data
+
+    if template == "custom":
+        missing = [k for k, present in
+                   [("page_width_px", has_width), ("page_height_px", has_height)]
+                   if not present]
+        if missing:
+            errors.append(CheckError(
+                layer=2,
+                path="<root>",
+                message=f"page_template=\"custom\" requires {' and '.join(missing)}",
+                hint="either add the missing dimension(s) or pick a preset page_template",
+            ))
+    elif template and template != "custom":
+        # Any non-custom value (A4 / B5 / JP_Tankobon / Webtoon / any future
+        # preset added to the schema enum) is a preset and must not carry
+        # explicit dimensions.
+        provided = [k for k, present in
+                    [("page_width_px", has_width), ("page_height_px", has_height)]
+                    if present]
+        if provided:
+            errors.append(CheckError(
+                layer=2,
+                path="<root>",
+                message=f"page_template=\"{template}\" must not coexist with "
+                        f"explicit {' / '.join(provided)} — pick one source of truth",
+                hint='set page_template="custom" if you want to specify dimensions explicitly',
+            ))
+    return errors
+
+
+_LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = [
+    r_page_index_continuity,
+    r_panel_index_continuity,
+    r_layout_fits_page,
+    r_panel_width_fits,
+    r_page_template_dim_consistency,
+]
+
+
+def _semantic_errors(data: dict) -> list[CheckError]:
+    result: list[CheckError] = []
+    for rule in _LAYER2_RULES:
+        result.extend(rule(data))
+    return result
+
+
+def collect_errors(data: dict) -> list[CheckError]:
+    """Return ALL validation errors as a flat list. Schema errors short-circuit
+    semantic checks because the latter assume the former's structure holds."""
+    schema_errs = _schema_errors(data)
+    if schema_errs:
+        return schema_errs
+    return _semantic_errors(data)
+
+
+def _format_human(errors: list[CheckError]) -> str:
+    lines = ["Comic script validation failed:", ""]
+    for e in errors:
+        block = [f"  [L{e.layer}] {e.path}", f"    {e.message}"]
+        if e.hint:
+            block.append(f"    hint: {e.hint}")
+        lines.append("\n".join(block))
+    return "\n".join(lines)
+
+
+def validate(data: dict) -> None:
+    """Run Layer 1 + Layer 2 validation. Raise ValidationError with all errors."""
+    errors = collect_errors(data)
+    if errors:
+        raise ValidationError(_format_human(errors))
 
 
 def validate_schema(data: dict) -> None:
-    """Validate `data` against the comic schema.
-
-    Raises ValidationError listing ALL violations (not just the first) on failure.
-    Returns None on success.
-    """
-    validator = Draft202012Validator(COMIC_SCHEMA)
-    errors = sorted(validator.iter_errors(data), key=lambda e: list(e.absolute_path))
-    if not errors:
-        return None
-    lines = ["Comic script validation failed:", ""]
-    lines.extend(_format_error(e) for e in errors)
-    raise ValidationError("\n".join(lines))
+    """Backwards-compatible alias. Prefer validate() for new call sites."""
+    validate(data)

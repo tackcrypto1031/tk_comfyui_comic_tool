@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ..core.normalizer import normalize_script
 from ..core.types import COMIC_SCRIPT_TYPE, SolvedScript
-from ..core.validator import validate_schema
+from ..core.validator import validate
 
 
 def _summary(script: SolvedScript) -> str:
@@ -74,6 +74,6 @@ class ComicScriptLoader:
         except json.JSONDecodeError as e:
             raise ValueError(f"JSON parse error at line {e.lineno}, col {e.colno}: {e.msg}") from e
 
-        validate_schema(data)
+        validate(data)
         script = normalize_script(data)
         return script, _summary(script)
