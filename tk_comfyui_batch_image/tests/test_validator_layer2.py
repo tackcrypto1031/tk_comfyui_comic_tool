@@ -157,6 +157,49 @@ def test_r4_panel_width_exceeds_inner_width():
     assert match.hint is not None
 
 
+def test_r5_custom_template_with_explicit_size_passes():
+    book = _minimal_valid_book()   # already has custom + both sizes
+    assert collect_errors(book) == []
+
+
+def test_r5_custom_template_missing_width_fails():
+    book = _minimal_valid_book()
+    del book["page_width_px"]
+    errs = collect_errors(book)
+    match = next(e for e in errs if e.layer == 2 and e.path == "<root>")
+    assert "page_width_px" in match.message
+    assert "custom" in match.message
+
+
+def test_r5_custom_template_missing_height_fails():
+    book = _minimal_valid_book()
+    del book["page_height_px"]
+    errs = collect_errors(book)
+    match = next(e for e in errs if e.layer == 2 and e.path == "<root>")
+    assert "page_height_px" in match.message
+
+
+def test_r5_preset_template_rejects_explicit_width():
+    book = _minimal_valid_book()
+    book["page_template"] = "A4"
+    # page_width_px still present -> reject
+    errs = collect_errors(book)
+    match = next(e for e in errs if e.layer == 2 and e.path == "<root>")
+    assert "A4" in match.message
+    assert "page_width_px" in match.message
+
+
+def test_r5_preset_template_without_explicit_size_passes():
+    book = _minimal_valid_book()
+    book["page_template"] = "A4"
+    del book["page_width_px"]
+    del book["page_height_px"]
+    # R3/R4 can't run without sizes, so they're no-ops; R5 is the only rule that
+    # fires on this shape, and it should stay silent.
+    errs = [e for e in collect_errors(book) if e.layer == 2]
+    assert errs == []
+
+
 def _minimal_valid_book() -> dict:
     return {
         "version": "1.0",

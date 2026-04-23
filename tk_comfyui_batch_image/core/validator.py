@@ -122,11 +122,44 @@ def r_panel_width_fits(data: dict) -> list[CheckError]:
     return errors
 
 
+def r_page_template_dim_consistency(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    template = data.get("page_template")
+    has_width = "page_width_px" in data
+    has_height = "page_height_px" in data
+
+    if template == "custom":
+        missing = [k for k, present in
+                   [("page_width_px", has_width), ("page_height_px", has_height)]
+                   if not present]
+        if missing:
+            errors.append(CheckError(
+                layer=2,
+                path="<root>",
+                message=f"page_template=\"custom\" requires {' and '.join(missing)}",
+                hint="either add the missing dimension(s) or pick a preset page_template",
+            ))
+    elif template in {"A4", "B5", "JP_Tankobon", "Webtoon"}:
+        provided = [k for k, present in
+                    [("page_width_px", has_width), ("page_height_px", has_height)]
+                    if present]
+        if provided:
+            errors.append(CheckError(
+                layer=2,
+                path="<root>",
+                message=f"page_template=\"{template}\" must not coexist with "
+                        f"explicit {' / '.join(provided)} — pick one source of truth",
+                hint='set page_template="custom" if you want to specify dimensions explicitly',
+            ))
+    return errors
+
+
 _LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = [
     r_page_index_continuity,
     r_panel_index_continuity,
     r_layout_fits_page,
     r_panel_width_fits,
+    r_page_template_dim_consistency,
 ]
 
 
