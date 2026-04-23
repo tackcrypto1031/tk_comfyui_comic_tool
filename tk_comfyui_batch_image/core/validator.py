@@ -101,10 +101,32 @@ def r_layout_fits_page(data: dict) -> list[CheckError]:
     return errors
 
 
+def r_panel_width_fits(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    page_width = data.get("page_width_px")
+    bleed = data.get("bleed_px", 0)
+    if page_width is None:
+        return errors  # R5 handles missing width for custom templates
+    inner_w = page_width - bleed * 2
+    for i, page in enumerate(data.get("pages", [])):
+        for j, panel in enumerate(page.get("panels", [])):
+            w = panel.get("width_px", 0)
+            if w > inner_w:
+                errors.append(CheckError(
+                    layer=2,
+                    path=f"pages[{i}].panels[{j}]",
+                    message=f"width {w}px exceeds inner width {inner_w}px "
+                            f"(= {page_width} - bleed {bleed}*2)",
+                    hint="reduce panel.width_px or raise page_width_px",
+                ))
+    return errors
+
+
 _LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = [
     r_page_index_continuity,
     r_panel_index_continuity,
     r_layout_fits_page,
+    r_panel_width_fits,
 ]
 
 

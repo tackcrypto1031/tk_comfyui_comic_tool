@@ -136,6 +136,27 @@ def test_r3_page_level_gutter_override_wins():
     assert collect_errors(book) == []
 
 
+def test_r4_panel_width_fits_passes():
+    book = _minimal_valid_book()
+    book["page_width_px"] = 1080
+    book["bleed_px"] = 20
+    book["pages"][0]["panels"][0]["width_px"] = 1040
+    assert collect_errors(book) == []
+
+
+def test_r4_panel_width_exceeds_inner_width():
+    book = _minimal_valid_book()
+    book["page_width_px"] = 1080
+    book["bleed_px"] = 20
+    book["pages"][0]["panels"][0]["width_px"] = 1100
+    errs = collect_errors(book)
+    match = next(e for e in errs if "panels[0]" in e.path)
+    assert match.path == "pages[0].panels[0]"
+    assert "1100" in match.message
+    assert "1040" in match.message
+    assert match.hint is not None
+
+
 def _minimal_valid_book() -> dict:
     return {
         "version": "1.0",
