@@ -28,6 +28,37 @@ def test_validate_raises_on_invalid_schema():
         validate({})   # empty dict fails schema required-field check
 
 
+def _book_with_pages(page_indexes: list[int]) -> dict:
+    book = _minimal_valid_book()
+    template = book["pages"][0]
+    book["pages"] = [{**template, "page_index": idx} for idx in page_indexes]
+    return book
+
+
+def test_r1_page_index_sequential_from_one_passes():
+    assert collect_errors(_book_with_pages([1, 2, 3])) == []
+
+
+def test_r1_page_index_gap_is_caught():
+    errs = collect_errors(_book_with_pages([1, 3, 4]))
+    assert len(errs) == 1
+    assert errs[0].layer == 2
+    assert errs[0].path == "pages[1].page_index"
+    assert "expected 2" in errs[0].message
+    assert "got 3" in errs[0].message
+
+
+def test_r1_page_index_starts_at_wrong_number():
+    errs = collect_errors(_book_with_pages([2, 3]))
+    assert len(errs) >= 1
+    assert errs[0].path == "pages[0].page_index"
+
+
+def test_r1_page_index_duplicate():
+    errs = collect_errors(_book_with_pages([1, 1]))
+    assert any("pages[1].page_index" in e.path for e in errs)
+
+
 def _minimal_valid_book() -> dict:
     return {
         "version": "1.0",

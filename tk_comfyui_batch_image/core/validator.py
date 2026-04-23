@@ -41,8 +41,22 @@ def _schema_errors(data: dict) -> list[CheckError]:
     ]
 
 
-_LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = []
-"""Populated by later tasks — keep empty for scaffold task."""
+def r_page_index_continuity(data: dict) -> list[CheckError]:
+    for i, page in enumerate(data.get("pages", [])):
+        expected = i + 1
+        got = page.get("page_index")
+        if got != expected:
+            return [CheckError(
+                layer=2,
+                path=f"pages[{i}].page_index",
+                message=f"expected {expected}, got {got} (pages must be contiguous from 1)",
+            )]
+    return []
+
+
+_LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = [
+    r_page_index_continuity,
+]
 
 
 def _semantic_errors(data: dict) -> list[CheckError]:
