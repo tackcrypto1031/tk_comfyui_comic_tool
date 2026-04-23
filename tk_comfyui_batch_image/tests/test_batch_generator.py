@@ -34,7 +34,6 @@ def _gen(node, script, backend, out_dir, on_failure="halt"):
     return node.generate(
         comic_script=script, model="M", clip="C", vae="V",
         positive_suffix="", negative_suffix="",
-        sampler_name="euler", scheduler="normal", steps=10, cfg=7.0, denoise=1.0,
         on_failure=on_failure, retries=1,
         _backend=backend, _out_dir=out_dir,
     )
@@ -128,7 +127,6 @@ def test_generator_does_not_mutate_input_panels(tmp_path: Path):
     node.generate(
         comic_script=script, model="M", clip="C", vae="V",
         positive_suffix="MASTERPIECE", negative_suffix="BLURRY",
-        sampler_name="euler", scheduler="normal", steps=10, cfg=7.0, denoise=1.0,
         on_failure="halt", retries=0,
         _backend=RecordingBackend(), _out_dir=tmp_path,
     )

@@ -75,17 +75,15 @@ class ComicBatchGenerator:
 
     @classmethod
     def INPUT_TYPES(cls):
+        # Sampler params (sampler_name, scheduler, steps, cfg, denoise) come
+        # exclusively from the JSON's default_sampler + per-panel sampler_override.
+        # The node is a driven KSampler loop — widgets don't duplicate JSON.
         return {
             "required": {
                 "comic_script": (COMIC_SCRIPT_TYPE,),
                 "model":        ("MODEL",),
                 "clip":         ("CLIP",),
                 "vae":          ("VAE",),
-                "sampler_name": ("STRING", {"default": "euler"}),
-                "scheduler":    ("STRING", {"default": "normal"}),
-                "steps":        ("INT",    {"default": 25, "min": 1, "max": 200}),
-                "cfg":          ("FLOAT",  {"default": 7.0, "min": 0.0, "max": 30.0, "step": 0.1}),
-                "denoise":      ("FLOAT",  {"default": 1.0, "min": 0.0, "max": 1.0,  "step": 0.01}),
                 "on_failure":   (["retry_then_skip", "halt"], {"default": "retry_then_skip"}),
                 "retries":      ("INT",    {"default": 2, "min": 0, "max": 10}),
             },
@@ -105,26 +103,26 @@ class ComicBatchGenerator:
         return d
 
     def _build_runtime_panel(
-        self, panel: SolvedPanel, widget: dict,
+        self, panel: SolvedPanel,
         positive_suffix: str, negative_suffix: str,
     ) -> SolvedPanel:
-        """Return a NEW SolvedPanel with widget defaults merged and suffixes
-        appended. The input panel is never mutated — cache hashing, re-runs,
-        and downstream pass-through all see the un-touched original."""
-        merged = {**widget, **panel.sampler}
+        """Return a NEW SolvedPanel with prompt suffixes appended. The input
+        panel is never mutated — cache hashing, re-runs, and downstream
+        pass-through all see the un-touched original."""
         pos = panel.positive_prompt
         if positive_suffix.strip():
             pos = f"{pos}, {positive_suffix.strip()}" if pos else positive_suffix.strip()
         neg = panel.negative_prompt
         if negative_suffix.strip():
             neg = f"{neg}, {negative_suffix.strip()}" if neg else negative_suffix.strip()
+        if pos == panel.positive_prompt and neg == panel.negative_prompt:
+            return panel
         return dataclasses.replace(
-            panel, sampler=merged, positive_prompt=pos, negative_prompt=neg,
+            panel, positive_prompt=pos, negative_prompt=neg,
         )
 
     def generate(
         self, comic_script: SolvedScript, model, clip, vae,
-        sampler_name, scheduler, steps, cfg, denoise,
         on_failure, retries,
         positive_suffix: str = "", negative_suffix: str = "",
         _backend: SamplerBackend | None = None,
@@ -132,10 +130,6 @@ class ComicBatchGenerator:
     ):
         backend = _backend if _backend is not None else _ComfyUIBackend()
         out_dir = self._resolve_out_dir(comic_script.job_id, _out_dir)
-        widget_defaults = {
-            "sampler_name": sampler_name, "scheduler": scheduler,
-            "steps": steps, "cfg": cfg, "denoise": denoise,
-        }
 
         log_lines: list[str] = []
         images: list[np.ndarray] = []
@@ -145,7 +139,7 @@ class ComicBatchGenerator:
         for page in comic_script.pages:
             for panel in page.panels:
                 run_panel = self._build_runtime_panel(
-                    panel, widget_defaults, positive_suffix, negative_suffix,
+                    panel, positive_suffix, negative_suffix,
                 )
 
                 paths = panel_paths(out_dir, run_panel)
