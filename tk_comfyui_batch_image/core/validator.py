@@ -42,16 +42,17 @@ def _schema_errors(data: dict) -> list[CheckError]:
 
 
 def r_page_index_continuity(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
     for i, page in enumerate(data.get("pages", [])):
         expected = i + 1
         got = page.get("page_index")
         if got != expected:
-            return [CheckError(
+            errors.append(CheckError(
                 layer=2,
                 path=f"pages[{i}].page_index",
                 message=f"expected {expected}, got {got} (pages must be contiguous from 1)",
-            )]
-    return []
+            ))
+    return errors
 
 
 _LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = [
