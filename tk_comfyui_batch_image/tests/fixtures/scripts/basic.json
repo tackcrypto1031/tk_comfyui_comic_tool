@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "job_id": "basic",
+  "reading_direction": "ltr",
+  "page_template": "custom",
+  "page_width_px": 512,
+  "page_height_px": 768,
+  "bleed_px": 20,
+  "gutter_px": 10,
+  "page_background": "#FFFFFF",
+  "base_seed": 7,
+  "style_prompt":     { "positive": "anime style", "negative": "blurry" },
+  "character_prompt": { "positive": "a girl", "negative": "" },
+  "default_sampler":  { "sampler_name": "euler", "scheduler": "normal", "steps": 20, "cfg": 7.0, "denoise": 1.0 },
+  "default_border":   { "width_px": 2, "color": "#000000", "style": "solid" },
+  "pages": [
+    {
+      "page_index": 1,
+      "page_prompt": { "positive": "", "negative": "" },
+      "layout_mode": "vertical_stack",
+      "panels": [
+        { "panel_index": 1, "scene_prompt": { "positive": "scene A", "negative": "" },
+          "width_px": 472, "height_px": 200, "align": "center", "shape": { "type": "rect" } },
+        { "panel_index": 2, "scene_prompt": { "positive": "scene B", "negative": "" },
+          "width_px": 472, "height_px": 200, "align": "left",   "shape": { "type": "rect" } },
+        { "panel_index": 3, "scene_prompt": { "positive": "scene C", "negative": "" },
+          "width_px": 472, "height_px": 200, "align": "right",  "shape": { "type": "rect" } }
+      ]
+    },
+    {
+      "page_index": 2,
+      "page_prompt": { "positive": "night", "negative": "" },
+      "layout_mode": "vertical_stack",
+      "panels": [
+        { "panel_index": 1, "scene_prompt": { "positive": "scene D", "negative": "" },
+          "width_px": 472, "height_px": 400, "align": "center", "shape": { "type": "rect" },
+          "sampler_override": { "steps": 30, "cfg": 8.0 } }
+      ]
+    }
+  ]
+}
