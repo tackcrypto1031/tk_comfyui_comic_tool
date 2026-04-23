@@ -152,3 +152,14 @@ def test_cli_max_errors_truncated_flag_in_json(tmp_path, capsys):
     f0 = payload["files"][0]
     assert len(f0["errors"]) == 2
     assert f0["truncated"] is True
+
+
+def test_cli_json_missing_file_becomes_layer0(tmp_path, capsys):
+    """In --json mode, a missing file is reported as layer=0 in the structured
+    output (not exit 3) so AI consumers can handle batch partial-failures."""
+    code = main([str(tmp_path / "nope.json"), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert payload["summary"] == {"total": 1, "ok": 0, "fail": 1}
+    assert payload["files"][0]["errors"][0]["layer"] == 0
+    assert payload["files"][0]["errors"][0]["path"] == "<io>"

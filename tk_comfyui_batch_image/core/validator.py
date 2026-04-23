@@ -16,7 +16,7 @@ class ValidationError(Exception):
 @dataclass(frozen=True)
 class CheckError:
     """A single validation failure in a form both human and JSON outputs can use."""
-    layer: int            # 1 = JSON schema, 2 = semantic rule
+    layer: int            # 0 = CLI I/O / pre-validation, 1 = JSON schema, 2 = semantic rule
     path: str             # e.g. "pages[0].panels[2].width_px" or "<root>"
     message: str
     hint: str | None = None
@@ -139,7 +139,10 @@ def r_page_template_dim_consistency(data: dict) -> list[CheckError]:
                 message=f"page_template=\"custom\" requires {' and '.join(missing)}",
                 hint="either add the missing dimension(s) or pick a preset page_template",
             ))
-    elif template in {"A4", "B5", "JP_Tankobon", "Webtoon"}:
+    elif template and template != "custom":
+        # Any non-custom value (A4 / B5 / JP_Tankobon / Webtoon / any future
+        # preset added to the schema enum) is a preset and must not carry
+        # explicit dimensions.
         provided = [k for k, present in
                     [("page_width_px", has_width), ("page_height_px", has_height)]
                     if present]

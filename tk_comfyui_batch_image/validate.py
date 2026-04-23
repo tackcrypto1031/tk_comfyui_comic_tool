@@ -6,6 +6,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import sys
 from dataclasses import asdict
@@ -70,17 +72,23 @@ def _file_result_dict(path: Path, status: str, errors: list[CheckError],
 
 
 def _ensure_utf8_stdio() -> None:
-    """Reconfigure stdout/stderr to UTF-8 if the current encoding can't handle it."""
-    import contextlib
-    import io
-    for stream_name in ("stdout", "stderr"):
-        stream = getattr(sys, stream_name)
-        if hasattr(stream, "reconfigure"):
-            with contextlib.suppress(Exception):
-                stream.reconfigure(encoding="utf-8", errors="replace")
-        elif hasattr(stream, "buffer"):
-            setattr(sys, stream_name,
-                    io.TextIOWrapper(stream.buffer, encoding="utf-8", errors="replace"))
+    """Make stdout/stderr UTF-8 on Windows terminals (cp950 by default)
+    so ✓/✗ characters don't raise UnicodeEncodeError. No-op on streams
+    already encoding UTF-8 or lacking `reconfigure`."""
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is None:
+            continue
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            with contextlib.suppress(AttributeError, io.UnsupportedOperation, OSError):
+                reconfigure(encoding="utf-8")
+            continue
+        buf = getattr(stream, "buffer", None)
+        if buf is None:
+            continue
+        with contextlib.suppress(AttributeError, io.UnsupportedOperation, OSError):
+            setattr(sys, name, io.TextIOWrapper(buf, encoding="utf-8", line_buffering=True))
 
 
 def main(argv: list[str] | None = None) -> int:
