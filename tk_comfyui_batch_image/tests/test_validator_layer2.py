@@ -61,6 +61,33 @@ def test_r1_page_index_duplicate():
     assert any("pages[1].page_index" in e.path for e in errs)
 
 
+def _book_with_panel_indexes_on_page_0(panel_indexes: list[int]) -> dict:
+    book = _minimal_valid_book()
+    panel_template = book["pages"][0]["panels"][0]
+    book["pages"][0]["panels"] = [
+        {**deepcopy(panel_template), "panel_index": idx} for idx in panel_indexes
+    ]
+    # Height fits: total panel height stays within page inner area.
+    for p in book["pages"][0]["panels"]:
+        p["height_px"] = 300
+    return book
+
+
+def test_r2_panel_index_sequential_passes():
+    assert collect_errors(_book_with_panel_indexes_on_page_0([1, 2, 3])) == []
+
+
+def test_r2_panel_index_gap_is_caught():
+    errs = collect_errors(_book_with_panel_indexes_on_page_0([1, 3]))
+    assert any(e.path == "pages[0].panels[1].panel_index" for e in errs)
+    assert any("expected 2" in e.message for e in errs)
+
+
+def test_r2_panel_index_out_of_order():
+    errs = collect_errors(_book_with_panel_indexes_on_page_0([2, 1]))
+    assert any(e.path == "pages[0].panels[0].panel_index" for e in errs)
+
+
 def _minimal_valid_book() -> dict:
     return {
         "version": "1.0",

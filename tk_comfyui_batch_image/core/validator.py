@@ -55,8 +55,25 @@ def r_page_index_continuity(data: dict) -> list[CheckError]:
     return errors
 
 
+def r_panel_index_continuity(data: dict) -> list[CheckError]:
+    errors: list[CheckError] = []
+    for i, page in enumerate(data.get("pages", [])):
+        for j, panel in enumerate(page.get("panels", [])):
+            expected = j + 1
+            got = panel.get("panel_index")
+            if got != expected:
+                errors.append(CheckError(
+                    layer=2,
+                    path=f"pages[{i}].panels[{j}].panel_index",
+                    message=f"expected {expected}, got {got} "
+                            f"(panels within a page must be contiguous from 1)",
+                ))
+    return errors
+
+
 _LAYER2_RULES: list[Callable[[dict], list[CheckError]]] = [
     r_page_index_continuity,
+    r_panel_index_continuity,
 ]
 
 
