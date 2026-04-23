@@ -1,0 +1,16 @@
+{
+  "job_id": "x",
+  "reading_direction": "ltr",
+  "page_template": "custom",
+  "page_width_px": 512,
+  "page_height_px": 768,
+  "bleed_px": 20,
+  "gutter_px": 10,
+  "page_background": "#FFFFFF",
+  "base_seed": 0,
+  "style_prompt":     { "positive": "", "negative": "" },
+  "character_prompt": { "positive": "", "negative": "" },
+  "default_sampler":  { "sampler_name": "euler", "scheduler": "normal", "steps": 20, "cfg": 7.0, "denoise": 1.0 },
+  "default_border":   { "width_px": 2, "color": "#000000", "style": "solid" },
+  "pages": []
+}
