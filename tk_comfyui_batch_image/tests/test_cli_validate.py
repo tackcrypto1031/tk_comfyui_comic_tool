@@ -70,3 +70,36 @@ def test_cli_unreadable_json_exits_3(tmp_path, capsys):
     p = _write(tmp_path, "broken.json", "{not json")
     code = main([str(p)])
     assert code == 3
+
+
+def test_cli_json_output_structure_on_success(tmp_path, capsys):
+    p = _write(tmp_path, "ok.json", _valid_minimal_book())
+    code = main([str(p), "--json"])
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert code == 0
+    assert payload["summary"] == {"total": 1, "ok": 1, "fail": 0}
+    assert len(payload["files"]) == 1
+    f0 = payload["files"][0]
+    assert f0["status"] == "ok"
+    assert f0["errors"] == []
+    assert f0["info"]["job_id"] == "cli_test"
+    assert f0["info"]["page_count"] == 1
+    assert f0["info"]["panel_count"] == 1
+
+
+def test_cli_json_output_structure_on_failure(tmp_path, capsys):
+    book = _valid_minimal_book()
+    book["pages"][0]["page_index"] = 5
+    p = _write(tmp_path, "bad.json", book)
+    code = main([str(p), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert payload["summary"] == {"total": 1, "ok": 0, "fail": 1}
+    f0 = payload["files"][0]
+    assert f0["status"] == "fail"
+    assert len(f0["errors"]) >= 1
+    err = f0["errors"][0]
+    assert err["layer"] == 2
+    assert err["path"] == "pages[0].page_index"
+    assert "expected 1" in err["message"]

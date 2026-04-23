@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from .core.validator import CheckError, collect_errors
@@ -55,6 +56,17 @@ def _print_file_human(path: Path, status: str, errors: list[CheckError],
                   f"(raise --max-errors to see all)")
 
 
+def _file_result_dict(path: Path, status: str, errors: list[CheckError], info: dict | None) -> dict:
+    d = {
+        "path": str(path),
+        "status": status,
+        "errors": [asdict(e) for e in errors],
+    }
+    if info is not None:
+        d["info"] = info
+    return d
+
+
 def _ensure_utf8_stdio() -> None:
     """Reconfigure stdout/stderr to UTF-8 if the current encoding can't handle it."""
     import contextlib
@@ -76,33 +88,65 @@ def main(argv: list[str] | None = None) -> int:
         description="Validate comic script JSON(s).",
     )
     parser.add_argument("files", nargs="*", help="JSON file(s) to validate")
+    parser.add_argument("--json", action="store_true",
+                        help="Emit machine-readable JSON instead of human-readable text")
     args = parser.parse_args(argv)
 
     if not args.files:
         parser.print_usage(sys.stderr)
         return 2
 
+    results: list[dict] = []
     any_fail = False
 
     for raw in args.files:
         path = Path(raw)
         if not path.exists():
-            print(f"✗ {path}  (file not found)", file=sys.stderr)
-            any_fail = True
-            return 3
+            if args.json:
+                results.append({"path": str(path), "status": "fail",
+                                "errors": [{"layer": 0, "path": "<io>",
+                                            "message": "file not found", "hint": None}]})
+                any_fail = True
+                continue
+            else:
+                print(f"✗ {path}  (file not found)", file=sys.stderr)
+                return 3
         try:
             data = _load_json(path)
         except (OSError, json.JSONDecodeError) as e:
-            print(f"✗ {path}  (I/O or JSON parse error: {e})", file=sys.stderr)
-            return 3
+            if args.json:
+                results.append({"path": str(path), "status": "fail",
+                                "errors": [{"layer": 0, "path": "<io>",
+                                            "message": f"I/O or JSON parse error: {e}",
+                                            "hint": None}]})
+                any_fail = True
+                continue
+            else:
+                print(f"✗ {path}  (I/O or JSON parse error: {e})", file=sys.stderr)
+                return 3
 
         errors = collect_errors(data)
         if errors:
             any_fail = True
-            _print_file_human(path, "fail", errors, None)
+            if args.json:
+                results.append(_file_result_dict(path, "fail", errors, None))
+            else:
+                _print_file_human(path, "fail", errors, None)
         else:
             info = {"version": data.get("version"), **_summarize_file(path, data)}
-            _print_file_human(path, "ok", [], info)
+            if args.json:
+                results.append(_file_result_dict(path, "ok", [], info))
+            else:
+                _print_file_human(path, "ok", [], info)
+
+    if args.json:
+        summary = {
+            "total": len(results),
+            "ok":   sum(1 for r in results if r["status"] == "ok"),
+            "fail": sum(1 for r in results if r["status"] == "fail"),
+        }
+        print(json.dumps({"summary": summary, "files": results},
+                         indent=2, ensure_ascii=False))
 
     return 1 if any_fail else 0
 
