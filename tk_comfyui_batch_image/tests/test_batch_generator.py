@@ -153,9 +153,11 @@ def test_retry_then_skip_persists_placeholder_across_runs(tmp_path: Path):
 
 class WrongShapeBackend(RecordingBackend):
     def vae_decode(self, vae, samples):
-        # Return the wrong height — should be detected by shape assertion.
+        # Return a too-small image — should trip the shape assertion in
+        # run_panel_sampler (which requires the decoded image to be at
+        # least as large as the requested panel size).
         h, w = samples["h"], samples["w"]
-        return np.full((h + 1, w, 3), 0.5, dtype=np.float32)
+        return np.full((max(1, h - 16), w, 3), 0.5, dtype=np.float32)
 
 
 def test_sampler_shape_mismatch_raises_in_halt_mode(tmp_path: Path):
@@ -164,4 +166,44 @@ def test_sampler_shape_mismatch_raises_in_halt_mode(tmp_path: Path):
     with pytest.raises(RuntimeError) as excinfo:
         _gen(ComicBatchGenerator(), script, WrongShapeBackend(), tmp_path,
              on_failure="halt")
-    assert "sampler returned shape" in str(excinfo.value.__cause__)
+    assert "vae_decode returned shape" in str(excinfo.value.__cause__)
+
+
+class RoundedShapeBackend(RecordingBackend):
+    """Mimic ComfyUI's real VAE: latents are 1/8 resolution, so decoded
+    images always have dims that are multiples of 8. When a panel requests
+    a non-multiple-of-8 size, run_panel_sampler must round UP for the
+    latent and crop the decoded output back to the exact requested size.
+    This backend is what tripped bug 1 in production."""
+
+    def empty_latent(self, w, h, batch_size=1):
+        assert w % 8 == 0 and h % 8 == 0, (
+            f"run_panel_sampler must round up to a multiple of 8, got ({w}, {h})"
+        )
+        return {"w": w, "h": h}
+
+    def vae_decode(self, vae, samples):
+        h, w = samples["h"], samples["w"]
+        return np.full((h, w, 3), 0.5, dtype=np.float32)
+
+
+def test_non_multiple_of_8_panel_dims_produce_exact_output_shape(tmp_path: Path):
+    """Regression: panels with width/height not divisible by 8 (e.g. 650,
+    380, 300) used to fail the shape check and be replaced with _red_x
+    placeholders. run_panel_sampler now rounds up for the latent and crops
+    back to the exact requested size."""
+    data = json.loads((FIXTURES / "basic.json").read_text(encoding="utf-8"))
+    # Force a non-%8 height on one panel.
+    data["pages"][0]["panels"][0]["height_px"] = 150   # 150 % 8 == 6
+    data["pages"][0]["panels"][0]["width_px"]  = 301   # 301 % 8 == 5
+    script = normalize_script(data)
+    backend = RoundedShapeBackend()
+    images, _, log = _gen(ComicBatchGenerator(), script, backend, tmp_path,
+                          on_failure="halt")
+    # The first panel's raw image must match the requested 150×301, padded
+    # together with the other panels in the stacked tensor. Check the saved
+    # PNG is exactly 150×301 (not 152×304 nor the _red_x fallback).
+    from PIL import Image
+    saved = Image.open(tmp_path / "comics" / script.job_id / "panels" / "p001_01.png")
+    assert saved.size == (301, 150), f"expected (301, 150), got {saved.size}"
+    assert "skipped with placeholder" not in log

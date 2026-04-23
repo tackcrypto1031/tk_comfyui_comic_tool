@@ -153,11 +153,6 @@ class ComicBatchGenerator:
                     t0 = time.time()
                     try:
                         img = run_panel_sampler(backend, model=model, clip=clip, vae=vae, panel=run_panel)
-                        expected_h, expected_w = run_panel.bbox_size[1], run_panel.bbox_size[0]
-                        if img.shape[:2] != (expected_h, expected_w) or img.ndim != 3 or img.shape[2] != 3:
-                            raise RuntimeError(
-                                f"sampler returned shape {img.shape}, expected ({expected_h}, {expected_w}, 3)"
-                            )
                         log_lines.append(f"{tag} ... generated ({time.time() - t0:.1f}s)"
                                          + (f" attempt {attempt + 1}/{max_attempts}" if attempt else ""))
                         break
